@@ -1,4 +1,6 @@
 from z3 import *
+import time
+from timeit import default_timer as timer
 
 class graph:
 
@@ -10,8 +12,8 @@ class graph:
     def getVertices(self):
         return list(self.gdict.keys())
 
-    
-
+# Finds a path between start and end in graph
+# Returns None if there is no path    
 def find_path(graph, start, end, path=[]):
     path = path + [start]
     if start == end:
@@ -24,6 +26,7 @@ def find_path(graph, start, end, path=[]):
             if newpath: return newpath
     return None
 
+# Returns a list of all edges in graph (edges are stored as sets of vertices)
 def findedges(graph):
     edges = []
     for v in graph.keys():
@@ -32,6 +35,7 @@ def findedges(graph):
                 edges.append({v, w})
     return edges
 
+# Adds an edge between v and w in graph
 def addedge(graph, v, w):
     if v in graph.keys():
         graph[v].append(w)
@@ -42,6 +46,8 @@ def addedge(graph, v, w):
     else:
         graph[w] = [v]
 
+# Returns a contradictory cycle (edges in g1 are taken to be dashed and edges in g2 are solid)
+# Returns None if there is no contradictory cycle
 def contradictory_cycle(g1, g2):
     for e in findedges(g2):
         if len(list(e)) == 1:
@@ -51,7 +57,7 @@ def contradictory_cycle(g1, g2):
             return find_path(g1, v, w)
     return None
 
-
+# Merges the two conjunctions f1 and f2 into a single conjunction and returns it
 def and_merge(f1, f2):
     result = set([])
     if (str(f1.decl()) != 'And'):
@@ -64,7 +70,30 @@ def and_merge(f1, f2):
         result = result.union(set(f2.children()))
     return And(result)
 
+# Eliminates all 'Implies' predicates from the formula in favour of 'Not' and 'Or'
+def implies_elim(formula):
+    root = str(formula.decl())
+    if (root == '=='):
+        return formula
+    elif (root == 'Implies'):
+        [f1, f2] = formula.children()
+        f1 = implies_elim(f1)
+        f2 = implies_elim(f2)
+        return Or(Not(f1), f2)
+    elif (root == 'Not'):
+        return Not(implies_elim(formula.children()[0]))
+    else:
+        res = []
+        for i in range(len(formula.children())):
+            res.append(implies_elim(formula.children()[i]))
+        if (root == 'And'):
+            return And(res)
+        if (root == 'Or'):
+            return Or(res)       
+
+# Converts formula into negation normal form
 def negation_normal_form(formula):
+    formula = implies_elim(formula)
     root = str(formula.decl())
     if (root == '=='):
         return formula
@@ -94,6 +123,7 @@ def negation_normal_form(formula):
                 return And(list)        
     return formula
 
+# Converts formula into DNF
 def convert_to_dnf(formula):
     formula = negation_normal_form(formula)
     root = str(formula.decl())
@@ -116,10 +146,11 @@ def convert_to_dnf(formula):
                 result.add(and_merge(i, j))
     return result
 
-
 pl_to_lit = []
 pl_letters = []
 
+# If literal has already been converted to a propositional letter, that propositional letter is returned
+# Otherwise, a new propositional letter is created and is returned
 def lit_to_pl(literal):
     root = literal.decl()
     if str(root) == '==':
@@ -131,13 +162,12 @@ def lit_to_pl(literal):
             i = pl_to_lit.index(set(literal.children()))
             return pl_letters[i]
 
-def pl_to_index(pl):
-    i = str(pl)[1:]
-    return eval(i)
+#def pl_to_index(pl):
+#    i = str(pl)[1:]
+#    return eval(i)
 
+# Converts an E formula into a PL formula
 def convert_to_pl(formula):
-    #formula = negation_normal_form(formula)
-    res = []
     root = formula.decl()
     if str(root) == '==':
         [v, w] = formula.children()
@@ -147,16 +177,20 @@ def convert_to_pl(formula):
     elif str(root) == 'Not':
         f = formula.children()[0]
         return Not(convert_to_pl(f))
+    elif str(root) == 'Implies':
+        f1 = formula.children()[0]
+        f2 = formula.children()[1]
+        return Implies(convert_to_pl(f1), convert_to_pl(f2))
     else:
+        res = []
         for f in formula.children():
             res.append(convert_to_pl(f))
         if str(root) == 'And':
             return And(res)
         elif str(root) == 'Or':
             return Or(res)
-           
-
-
+        elif str(root) == 'Implies':
+            return Implies(res)
 
 
 def approach1(formula):
@@ -165,7 +199,6 @@ def approach1(formula):
     for conjunction in dnf:
         g1 = {}
         g2 = {}
-        #print(conjunction)
         root = conjunction.decl()
         if str(root) == "And":
             for literal in conjunction.children():
@@ -181,7 +214,6 @@ def approach1(formula):
     return "UNSAT"
 
 def approach2(formula):
-    #formula = negation_normal_form(formula)  
     global pl_letters
     global pl_to_lit
     pl_letters = []
@@ -201,12 +233,6 @@ def approach2(formula):
             else:
                 addedge(g2, v, w)
         cont_cycle = contradictory_cycle(g1, g2)
-        #print(s)
-        #print(pl_to_lit)
-        #print(pl_letters)
-        #print(m)
-        #print(cont_cycle)
-        #print('')
         if cont_cycle != None:
             new_clause = []
             for i in range(len(cont_cycle) - 1):
@@ -223,8 +249,7 @@ def approach2(formula):
     pl_letters = []
     return "UNSAT"
 
-def approach3(formula):        
-    #formula = negation_normal_form(formula)  
+def approach3(formula):          
     global pl_letters
     global pl_to_lit
     pl_letters = []
@@ -232,8 +257,6 @@ def approach3(formula):
     pl_formula = convert_to_pl(formula)
     s = Solver()
     s.add(pl_formula)
-    #print(pl_letters)
-    #print(pl_to_lit)
     vertices = []
     for i in range(len(pl_letters)):
         [v, w] = list(pl_to_lit[i])
@@ -241,7 +264,6 @@ def approach3(formula):
             vertices.append(v)
         if w not in vertices:
             vertices.append(w)
-    #print(vertices)
     for i in vertices:
         for j in vertices:
             for k in vertices:
@@ -266,8 +288,6 @@ def approach3(formula):
                 else:
                     c = pl_to_lit.index({i, k})
                 s.add(Or(Not(pl_letters[a]), Not(pl_letters[b]), pl_letters[c]))
-    #print(pl_letters)
-    #print(pl_to_lit)
     result = s.check()
     if result == sat:
         return "SAT"
@@ -276,26 +296,27 @@ def approach3(formula):
                 
                 
 
-
+# Declare uninterpreted constants and input the formula here
 x1, x2, x3, x4, x5, x6, x7, f1, f2, f3, g1, g2, h1, h2 = Ints('x1 x2 x3 x4 x5 x6 x7 f1 f2 f3 g1 g2 h1 h2')   
+formula = And(x1 == x2, Implies(x1 == x2, x2 == x3), Not(x1 == x3))
 
-formula = And(x1 == x2, Or(x2 ==x3, f2 == f3), Not(f1 == f3), Or(Not(x1 == x3), f1 == f3), Or(Not(x2 == x3), f2 == f3))
-#print(convert_to_dnf(formula))
+
+
 g1 = {}
 g2 = {}
 
 
+start = timer()
+res = approach1(formula)
+end = timer()
+print("Approach 1: ", res, ",", end - start)
 
-path = find_path(g2, f3, f1)
+start = timer()
+res = approach2(formula)
+end = timer()
+print("Approach 2: ", res, ",", end - start)
 
-f = Or(Not(And(Not(x1 == x2), x1 == x3, Not(x3 == x3))), x2 == x2)
-f1 = negation_normal_form(f)
-#print(f1)
-
-x, y, z = Ints('x y z')
-
-#print(convert_to_pl(f))
-#print(convert_to_pl(f1))
-print(approach1(formula))
-print(approach2(formula))
-print(approach3(formula))
+start = timer()
+res = approach3(formula)
+end = timer()
+print("Approach 3: ", res, ",", end - start)
