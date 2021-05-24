@@ -25,7 +25,7 @@ def test_formula6_bryant():
     assert bryant(formula6) == z3.sat
 
 def test_formula7_bryant():
-    assert bryant(formula7) == z3.unsat
+    assert bryant(formula7) == z3.sat
 
 def test_formula8_bryant():
     assert bryant(formula8) == z3.unsat
@@ -56,7 +56,7 @@ def test_formula6_dpllt():
     assert dpllt(formula6) == z3.sat
 
 def test_formula7_dpllt():
-    assert dpllt(formula7) == z3.unsat
+    assert dpllt(formula7) == z3.sat
 
 def test_formula8_dpllt():
     assert dpllt(formula8) == z3.unsat
@@ -87,7 +87,7 @@ def test_formula6_dnf_eg():
     assert dnf_eg(formula6) == z3.sat
 
 def test_formula7_dnf_eg():
-    assert dnf_eg(formula7) == z3.unsat
+    assert dnf_eg(formula7) == z3.sat
 
 def test_formula8_dnf_eg():
     assert dnf_eg(formula8) == z3.unsat
